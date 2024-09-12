@@ -17,10 +17,12 @@ def get_median_rate(db: Session, company_id: int, transport_type: str, wk: int) 
 
     records = db.query(models.Record).filter(
         models.Record.wk == wk,
-        models.Record.company.id == company_id,
+        models.Record.company_id == company_id,
         models.Record.transport_type == transport_type,
     ).all()
-    return median([record.total_linehaul_cost / record.miles for record in records])
+    if records:
+        return median([record.total_linehaul_cost / record.miles for record in records])
+    return 0.0
 
 
 def create_or_update_record(db: Session, records: list[schemas.Record]):
@@ -33,12 +35,25 @@ def create_or_update_record(db: Session, records: list[schemas.Record]):
         rec_kwargs = record.dict()
         rec_kwargs["company_id"] = company_ids[rec_kwargs.pop("company_name")]
         db_record = models.Record(
-            **record.dict(),
-            wk=int(record.created_date.isoformat("%Y%W")),
+            **rec_kwargs,
+            wk=int(record.created_date.strftime("%Y%W")),
         )
         db.add(db_record)
     db.commit()
 
+def create_companies(db: Session, companies: list[schemas.Company]):
+    for company in companies:
+        db_company = models.Company(name=company.name)
+        db.add(db_company)
+        db.flush()
+        db.refresh(db_company)
+        for jointg_id in company.jointgs:
+            db_jointg = db.query(models.JointG).filter(models.JointG.id == jointg_id).first()
+            if db_jointg is None:
+                db_jointg = models.JointG(id=jointg_id)
+            db_jointg.companies.append(db_company)
+            db.add(db_jointg)
+    db.commit()
 
 def get_companies(db: Session, company_ids: list[int] | None = None) -> list[models.Company]:
     company_query = db.query(models.Company).filter()
@@ -47,4 +62,5 @@ def get_companies(db: Session, company_ids: list[int] | None = None) -> list[mod
     return company_query.all()
 
 def get_non_empty_wks(db: Session) -> list[int]:
-    return db.query(models.Record).with_entities(models.Record.wk).distinct().all()
+    return [wk[0] for wk in db.query(models.Record).with_entities(models.Record.wk).distinct().all()]
+

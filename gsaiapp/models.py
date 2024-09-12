@@ -1,7 +1,8 @@
 import datetime
 import enum
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, String
+from sqlalchemy import (Column, DateTime, Enum, Float, ForeignKey, Integer,
+                        String, Table)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -15,6 +16,14 @@ class TransportTypeEnum(enum.Enum):
 class CurrencyEnum(enum.Enum):
     USD = 0
     EUR = 1
+    CAD = 2
+
+association_table = Table(
+    "association_table",
+    Base.metadata,
+    Column("jointg_id", ForeignKey("jointgs.id"), primary_key=True),
+    Column("company_id", ForeignKey("companies.id"), primary_key=True),
+)
 
 class Company(Base):
     __tablename__ = "companies"
@@ -22,14 +31,13 @@ class Company(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String)
     records: Mapped[list["Record"]] = relationship(back_populates="company")
-    jointgs: Mapped[list["JointG"]] = relationship(back_populates="company")
+    jointgs: Mapped[list["JointG"]] = relationship(secondary=association_table, back_populates="companies")
 
 class JointG(Base):
     __tablename__ = "jointgs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"))
-    company: Mapped["Company"] = relationship(back_populates="jointgs")
+    companies: Mapped[list["Company"]] = relationship(secondary=association_table, back_populates="jointgs")
 
 class Record(Base):
     __tablename__ = "records"

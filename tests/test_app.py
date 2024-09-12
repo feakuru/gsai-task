@@ -13,18 +13,32 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
 def clean_database():
-    # delete the test database before...
-    if os.path.isfile('./gsai_records.db'):
-        logger.info("Test setup: cleaning SQLite database")
-        os.remove('./gsai_records.db')
     yield
-    # ..and after running the test
+    # delete the test database after running the test
     if os.path.isfile('./gsai_records.db'):
         logger.info("Test teardown: cleaning SQLite database")
         os.remove('./gsai_records.db')
 
 @pytest.fixture(autouse=True)
-def fill_from_test_prq_file():
+def fill_companies_from_test_prq_file():
+    prq_data = pd.read_parquet("tests/data/meta.prq")
+    prq_data["name"] = prq_data.pop("companyName")
+    data = prq_data.to_dict("records")
+    for idx, row in enumerate(data):
+        jointgs = []
+        for key in row:
+            if key.startswith("jointgs"):
+                jointgs.append(int(key.removeprefix("jointgs")))
+        data[idx] = {
+            "name": data[idx]["name"],
+            "jointgs": jointgs,
+        }
+    logger.info(f"Test setup: company creation request: {data[:5]}, ...")
+    create_companies_response = client.post("companies/", json={"companies": data})
+    logger.info(f"Test setup: company creation response: {create_companies_response.status_code}, {create_companies_response.content.decode()[:1000]}...")
+
+@pytest.fixture(autouse=True)
+def fill_records_from_test_prq_file():
     prq_data = pd.read_parquet("tests/data/data.prq")
     prq_data.total_linehaul_cost = prq_data.total_linehaul_cost.astype(float)
     prq_data.exchange_rate = prq_data.total_linehaul_cost.astype(float)
@@ -38,6 +52,6 @@ def fill_from_test_prq_file():
     logger.info(f"Test setup: record creation response: {create_record_response.status_code}, {create_record_response.content.decode()[:1000]}...")
 
 def test_read_main():
-    response = client.get("/report")
-    assert response.status_code == 200
+    response = client.get("/report/?company_ids=1")
+    assert response.status_code == 200, response.content.decode()
     assert response.json() == {"msg": "Hello World"}

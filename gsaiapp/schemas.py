@@ -18,5 +18,15 @@ class Record(BaseModel):
     class Config:
         from_attributes = True
 
+
 class MultipleRecords(BaseModel):
     records: list[Record]
+
+
+class Company(BaseModel):
+    name: str
+    jointgs: list[int]
+
+
+class Companies(BaseModel):
+    companies: list[Company]
