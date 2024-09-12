@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "gsaitask"
+version = "0.1.0"
+description = "greenscreens.ai task by Dmitry O"
+authors = ["Dmitry O <feakuru@gmail.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.114.0"
+numpy = "^2.1.1"
+pandas = "^2.2.2"
+pyarrow = "^17.0.0"
+sqlalchemy = "^2.0.34"
+uvicorn = "^0.30.6"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.11.2"
+pytest = "^8.3.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
