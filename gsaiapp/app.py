@@ -1,5 +1,4 @@
 import datetime
-import itertools
 
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException
