@@ -1,5 +1,4 @@
 import datetime
-import logging
 
 import pandas as pd
 from fastapi import Depends, FastAPI, HTTPException
@@ -12,7 +11,6 @@ from .db import SessionLocal, engine
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-logger = logging.getLogger(__name__)
 
 # Dependency
 def get_db():
@@ -26,10 +24,10 @@ def get_db():
 @app.post("/companies/", response_model=schemas.Companies)
 def create_companies(companies: schemas.Companies, db: Session = Depends(get_db)):
     try:
-        crud.create_companies(db, companies.companies)
+        result = crud.create_companies(db, companies.companies)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=e.args[0])
-    return companies
+    return schemas.Companies(companies=result)
 
 @app.post("/records/", response_model=schemas.MultipleRecords)
 def create_or_update_records(records: schemas.MultipleRecords, db: Session = Depends(get_db)):
@@ -44,13 +42,13 @@ def create_or_update_records(records: schemas.MultipleRecords, db: Session = Dep
 def get_report(company_ids: str, db: Session = Depends(get_db)):
     companies = crud.get_companies(db, [int(cid) for cid in company_ids.split(',')])
     non_empty_wks = crud.get_non_empty_wks(db)
-    logger.info(
-        "Report creation: company ids: %s, companies: %s, wks: %s",
-        company_ids,
-        [{"id": company.id, "name": company.name} for company in companies],
-        non_empty_wks,
-    )
     rows = []
+
+    # this cycle is the main performance bottleneck for this application. as mentioned in
+    # `crud.py:get_median_rate`, it could be avoided and wrapped into one SQL request.
+    # even without this optimization, the current execution times are mostly below
+    # 2s for one company and 7s for 5 companies on my machine with the test data,
+    # which I consider to be a good result for an MVP.
     for company in companies:
         for transport_type in ['N', 'D', 'R']:
             row_data = [
@@ -64,7 +62,6 @@ def get_report(company_ids: str, db: Session = Depends(get_db)):
                 ) for wk in non_empty_wks],
             ]
             rows.append(row_data)
-            logger.info("Report row appended: %s", row_data)
     report_frame = pd.DataFrame(rows, columns=["company", "transport type", *non_empty_wks])
     return Response(
         media_type="application/vnd.apache.parquet",

@@ -24,6 +24,7 @@ class MultipleRecords(BaseModel):
 
 
 class Company(BaseModel):
+    id: int | None = None
     name: str
     jointgs: list[int]
 

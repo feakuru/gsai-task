@@ -6,14 +6,18 @@ from . import models, schemas
 
 
 def get_median_rate(db: Session, company_id: int, transport_type: str, wk: int) -> float:
-    # this query would also be different for the Postgres index case described in ./models.py
+    # this query would be different for the Postgres index case described in ./models.py
     # it would leverage the index, using extract('week') in the select filter.
-    # this query would be significantly faster in Postgres, because it supports medians
+    # it would also be significantly faster in Postgres because it supports medians
     # (by way of `PERCENTILE(50%, value)`). this would also allow to select medians for
     # every row right away, with one SQL query.
 
     # there are ways to manually calculate median from inside SQLite,
     # which would improve the speed in this case, but bring down code readability.
+
+    # the `jointgs` case is currently not handled, but with one SQL query,
+    # non-Python-native median calculation and a membership model (see `models.py`),
+    # it would be handled by a couple of `JOIN`s.
 
     records = db.query(models.Record).filter(
         models.Record.wk == wk,
@@ -32,7 +36,7 @@ def create_or_update_record(db: Session, records: list[schemas.Record]):
     for record in records:
         if record.company_name not in company_ids:
             raise ValueError(f"Company {record.company_name} not found")
-        rec_kwargs = record.dict()
+        rec_kwargs = record.model_dump()
         rec_kwargs["company_id"] = company_ids[rec_kwargs.pop("company_name")]
         db_record = models.Record(
             **rec_kwargs,
@@ -41,12 +45,18 @@ def create_or_update_record(db: Session, records: list[schemas.Record]):
         db.add(db_record)
     db.commit()
 
-def create_companies(db: Session, companies: list[schemas.Company]):
+def create_companies(db: Session, companies: list[schemas.Company]) -> list[schemas.Company]:
+    result = []
     for company in companies:
         db_company = models.Company(name=company.name)
         db.add(db_company)
         db.flush()
         db.refresh(db_company)
+        result.append(schemas.Company(
+            id=db_company.id,
+            name=db_company.name,
+            jointgs=[j.id for j in db_company.jointgs],
+        ))
         for jointg_id in company.jointgs:
             db_jointg = db.query(models.JointG).filter(models.JointG.id == jointg_id).first()
             if db_jointg is None:
@@ -54,6 +64,7 @@ def create_companies(db: Session, companies: list[schemas.Company]):
             db_jointg.companies.append(db_company)
             db.add(db_jointg)
     db.commit()
+    return result
 
 def get_companies(db: Session, company_ids: list[int] | None = None) -> list[models.Company]:
     company_query = db.query(models.Company).filter()
